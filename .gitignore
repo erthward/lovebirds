@@ -6,6 +6,7 @@ TODO.md
 *.odp
 *.pptx
 *.pdf
+*.swp
 scratch/*
 __pycache__/
 *.py[cod]

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sobig"
-version = "0.1.8"
+version = "0.1.11"
 description = "Simulation of observations of biodiversity across gradients."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -17,6 +17,7 @@ dependencies = [
   "numpy",
   "pandas",
   "numba",
+  "coverage>=7.6.1",
   "nlmpy",
   "scikit-learn>=1.2",
   "dms-variants",

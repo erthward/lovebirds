@@ -123,23 +123,6 @@ def _standardize_arr(arr: Union[vectorlike, rasterlike],
 
 
 
-def _calc_rarefaction_curve(N: int,
-                       comm: Dict[int, int],
-                       effort: float,
-                      ):
-    '''
-    calcuates n (sample size) and k (species richness of sample) as functions of
-    N (total community count), K (total species richness), N_i (count of each
-    species), and sampling effort (a measure constrained to the [0, 1] interval)
-
-        '''
-    assert N > 0
-    assert 0 <= effort <= 1
-    K = len(comm)
-    k = K - np.sum([N - comb(Ni, n) for Ni in comm.values()])/(comb(N, n))
-    return n, k
-
-
 #--------
 # classes
 #--------
@@ -152,6 +135,38 @@ class fEnv:
 
     Includes a method for getting the function's approximate slope at any value
     along the range of the environmental variable.
+
+    Parameters
+    ----------
+    id : int
+        Integer identifier for this environmental variable/layer (used in
+        axis labels and to align with raster bands elsewhere in `Sim`).
+    knots : vectorlike
+        Ordered (low to high) knot locations, in the units of the
+        environmental variable, defining the I-spline basis.
+    coeffs : vectorlike
+        Coefficients for the linear combination of I-spline basis
+        functions. Must have length `len(knots) + 1`, and the final
+        coefficient must be 0.0 (ensuring f(Env)'s slope goes to 0 at the
+        high end of the environmental gradient).
+    order : int, default 3
+        Order of the I-spline basis functions.
+    env_x_vals : vectorlike or None, default None
+        Ordered (low to high) sequence of environmental values at which to
+        evaluate f(Env). If None, defaults to 1000 points evenly spaced
+        between the minimum and maximum knot values.
+
+    Attributes
+    ----------
+    x : np.ndarray
+        Environmental values at which f(Env) is evaluated.
+    y : np.ndarray
+        Corresponding f(Env) values.
+    splines : dms_variants.ispline.Isplines
+        The underlying I-spline basis-function object.
+    x_gdm_fit, y_gdm_fit : np.ndarray or None
+        x and y values of a GDM-fitted version of this f(Env), populated
+        via `_add_GDM_fit` once a GDM has been run; None until then.
     '''
     def __init__(self,
                  id: int,
@@ -332,7 +347,34 @@ class fEnv:
 
 class Species:
     '''
-    class for a simulated species
+    A simulated species, represented by its niche parameters, abundance
+    parameter, and detection probability.
+
+    Parameters
+    ----------
+    niche : list of vectorlike
+        One (mu, sigma) pair per environmental layer, defining the mean and
+        standard deviation of the species' Gaussian niche along that
+        environmental axis (in the native units of that environmental
+        layer).
+    max_poisson_lambda : float
+        The Poisson lambda used to draw abundance at a location where the
+        species' probability of presence equals 1.0 (a ceiling on expected
+        abundance; realized abundance at a given site is drawn from a Poisson
+        ditstribution that uses this value linearly scaled down according to
+        the Species' local probability of presence).
+    prob_detect : float or None
+        The species' intrinsic detection probability (i.e., on the [0, 1]
+        interval), used when sampling with `by_detect_prob=True`.
+        Can be None if detection probability isn't being modeled.
+
+    Attributes
+    ----------
+    niche : list of 2-tuples
+        Defined by the `niche` parameter.
+    max_poisson_lambda : float
+    prob_detect : float or None
+
     '''
     def __init__(self,
                  niche: list[vectorlike],
@@ -351,7 +393,83 @@ class Species:
 
 class Sim:
     '''
-    overall class for the simulation
+    Top-level simulation object.
+
+    A simulated landscape, species pool, and
+    the resulting community composition at every site on that landscape.
+
+    A `Sim` bundles: (1) the landscape (i.e., a stack of one or more
+    environmental raster layers), (2) the regional species pool (i.e.,
+    a set of `Species` objects, the total size of which is determined
+    by the `gamma` parameter, with environmental niches drawn along each of the
+    axes defined by the landscape's layers, (3) `fEnv` functions relating
+    environmental turnover to ecological turnover (by way of providing the
+    basis for `Species`' simualted niches), and (4) the resulting simulated
+    communities (species presence and abundances) at every raster cell.
+
+    Parameters
+    ----------
+    env : list of rasterlike
+        One 2D raster (np.ndarray or xarray.DataArray) per environmental
+        layer, all of identical shape.
+    fenvs : list of fEnv
+        One `fEnv` object per environmental layer in `env`, in the same
+        order, describing that layer's relationship to ecological
+        turnover.
+    gamma : int
+        Total number of species in the regional species pool
+        (i.e., 'inventory diversity', sensu Whittaker).
+    min_niche_sigma : float, default 0.001
+        Minimum niche breadth (in standard-deviation units of the
+        relevant environmental layer) that any species can have on any axis.
+    max_niche_sigma : float, default 0.1
+        Maximum niche breadth (in standard-deviation units) that any species
+        can have on any axis. If None, defaults, for each landscape layer, to half
+        of that layer's environmental range.
+    use_multivar_normal_niche : bool, default False
+        If True, model species' niches as a joint multivariate normal
+        across all environmental axes, rather than as a product of
+        independent univariate normals.
+    prob_pres_thresh_round_to_1 : float or None, default None
+        If provided, any computed presence probability at or above this
+        threshold is rounded up to 1.0.
+    max_poisson_lambdas : vectorlike or None, default None
+        Per-species ceiling values for the abundance-determining Poisson
+        distribution (see `Species.max_poisson_lambda`). If None, drawn
+        randomly (uniform) between 1 and `max_poisson_lambda_across_spp`
+        for each species.
+    max_poisson_lambda_across_spp : int, default 1000
+        Upper bound used when randomly drawing `max_poisson_lambdas`.
+    detect_probs : vectorlike or None, default None
+        Per-species detection probabilities. If None, drawn randomly
+        (uniform on [0, 1]) for each species.
+    verbose : bool, default False
+        If True, print progress information during simulation setup.
+    debug : bool, default False
+        If True, print additional information useful for debugging.
+    timeit : bool, default True
+        If True, print the runtime of the slower setup steps (species
+        creation, community simulation).
+
+    Attributes
+    ----------
+    env : np.ndarray
+        Stacked environmental layers, shape (n_layers, nrow, ncol) -- which is to
+        say (n_layers, y, x).
+    fenvs : list of `fEnv` objects
+    gamma : int
+    sites : list of 2-tuples of floats
+        The (x, y) coordinates (cell centers) of every raster cell's simulated community.
+    spp : dict
+        Mapping of species IDs (ints) to `Species` objects.
+    comms : list of dict
+        The full simulated community (as a {species ID: abundance} dict) at every
+        site in `sites`, and in the same order as `sites`, to allow ordinal
+        indexing relied on throughout the package.
+    surveys, gdm_fits, gdm_pca_rast
+        These start as empty attributes, but are populated by `sim_obs` and
+        `run_GDM`, if/when those methods have been executed. Until then, they
+        are None.
     '''
     def __init__(self,
                  env: List[rasterlike],
@@ -405,7 +523,7 @@ class Sim:
         if self._timeit:
             start = time.time()
         if self._verbose:
-            print(f"\n\nCREATING SPECIES...\n\n")
+            print(f"\n\n\tCREATING SPECIES...\n\n")
         self._make_all_species(max_poisson_lambdas=max_poisson_lambdas,
                                detect_probs=detect_probs,
                               )
@@ -414,7 +532,7 @@ class Sim:
             runtime_sec = stop-start
             self._make_all_species_runtime = runtime_sec
             if self._verbose:
-                print(("\n\nALL SPECIES CREATED IN "
+                print(("\n\n\tALL SPECIES CREATED IN "
                        f"{np.round(self._make_all_species_runtime/60, 2)} "
                        "MINUTES.\n\n"))
         # simulate the communities
@@ -438,10 +556,39 @@ class Sim:
                    recalc_std: bool = False,
                   ) -> None:
         '''
-        update the environment of a Sim object (e.g., to model the effects of
-        environmental change)
-        NOTE: defaults to not updating the standard deviation of the layers
-              (which are used to rescale species niche widths)
+        Replace the Sim's environmental layers, to simulate
+        environmental change, then re-simulate.
+
+        Note: Defaults to not updating the standard deviation of the layers
+              (which are used to rescale species niche widths).
+        Note: Only resimulates community composition if the environment
+              has actually changed.
+
+        Parameters
+        ----------
+        env : list of rasterlike
+            New set of environmental layers, one per existing layer,
+            matching the landscape's original dimensions.
+        verbose : bool or None, default None
+            If True, print progress information. If None, uses the Sim's
+            stored `_verbose` setting.
+        timeit : bool or None, default None
+            If True, print the runtime of the community re-simulation.
+            If None, uses the Sim's stored `_timeit` setting.
+        debug : bool or None, default None
+            If True, print debugging information. If None, uses the Sim's
+            stored `_debug` setting.
+        recalc_std : bool, default False
+            If True, recalculate each layer's standard deviation (used to
+            rescale species' niche widths) from the new environment. If
+            False, the standard deviations of the original environment
+            are retained even though the environment itself is updated.
+
+        Returns
+        -------
+        None
+            Updates `self.env` (and `self.comms`, if the environment
+            changed) in place.
         '''
         if verbose is None:
             verbose = self._verbose
@@ -538,7 +685,7 @@ class Sim:
             detect_probs = np.random.uniform(low=0, high=1, size=self.gamma)
         else:
             assert type(detect_probs) in [list, tuple, np.ndarray]
-            assert len(detect_probs) == gamma
+            assert len(detect_probs) == self.gamma
             assert np.all(detect_probs >= 0)
             assert np.all(detect_probs <= 1)
         # use inverse of f(Env) slope at each μ to draw each σ
@@ -712,7 +859,7 @@ class Sim:
         if timeit:
             start = time.time()
         if verbose:
-            print(f"\n\nSIMULATING COMMUNITIES AT SURVEY POINTS...\n\n")
+            print(f"\n\n\tSIMULATING COMMUNITIES AT SURVEY POINTS...\n\n")
         # create the simulated communities at each point
         if not hasattr(self, 'comms'):
             comms = []
@@ -742,15 +889,24 @@ class Sim:
             runtime_sec = stop-start
             self._runtime_sim_comms = runtime_sec
             if verbose:
-                print(("\n\nALL COMMUNITIES SIMULATED IN "
+                print(("\n\n\tALL COMMUNITIES SIMULATED IN "
                        f"{np.round(self._runtime_sim_comms/60, 2)} "
                        "MINUTES.\n\n"))
 
 
     def save_to_file(self, filepath):
-        """
+        '''
         Save entire `Sim` object to a pickle file (i.e., .pkl).
-        """
+
+        Parameters
+        ----------
+        filepath : str
+            Destination path; must end with '.pkl'.
+
+        Returns
+        -------
+        None
+        '''
         assert filepath.endswith('.pkl')
         with open(filepath, "wb") as f:
             dill.dump(self, f)
@@ -758,19 +914,30 @@ class Sim:
 
     @classmethod
     def load_from_file(cls, filepath):
-        """
+        '''
         Load a `Sim` object from a pickle file (i.e., .pkl).
-        """
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the pickle file to load; must end with '.pkl'.
+
+        Returns
+        -------
+        Sim
+            The restored `Sim` object.
+
+        '''
         assert filepath.endswith('.pkl')
         with open(filepath, "rb") as f:
             return dill.load(f)
 
 
     def _get_site_indices(self, survey_sites):
-        """
+        '''
         Returns the integer site indices pertaining to each of a list of survey
         sites, which can be directly used to index self.sites or self.comms.
-        """
+        '''
         if survey_sites is None:
             list_inds = [*range(len(self.sites))]
         else:
@@ -798,7 +965,7 @@ class Sim:
                 scheme: str = 'perfect',
                 abund: bool = True,
                 absen: bool = True,
-                survey_sites: List[Tuple(float, float)] = None,
+                survey_sites: List[Tuple[float]] = None,
                 effort: Optional[Union[int, float, list, tuple, np.ndarray]] = None,
                 by_rel_abund: bool = True,
                 by_detect_prob: bool = False,
@@ -823,8 +990,9 @@ class Sim:
         (both default to None, which yields uniform sampling probabilities
         across all individuals)
 
-        Returns a list of observation dicts, one per survey site, with each
-        dict containing key:value pairs of species_id:count
+        Returns a pandas.DataFrame of observations, with site-by-species (i x
+        j) matrix structure for abundance-absence and presence-absence data,
+        or with one row per species obseration for presence-only data
 
         Parameters
         ----------
@@ -880,8 +1048,11 @@ class Sim:
         Returns
         -------
         pandas.DataFrame
-            One row per sampling site, with site IDs and coordinates in 'site',
+            For abundance-absence and presence-absence data, one row per
+            sampling site, with site IDs and coordinates in 'site',
             'x', and 'y' columns and counts of species i in 'spp<i>' columns.
+            For abundance-only and presence-only data, one row per species
+            observation.
 
         Notes
         -----
@@ -918,6 +1089,7 @@ class Sim:
                 assert len(effort) == len(self.sites)
                 assert np.all(effort >= 0)
                 assert np.all(effort <= 1)
+                efforts = effort
         else:
             efforts = None
         if save:
@@ -943,7 +1115,7 @@ class Sim:
                 label = 'PERFECT '
             elif scheme == 'sample':
                 label = ''
-            print(f"\n\nSIMULATING {label}SAMPLING "
+            print(f"\n\n\tSIMULATING {label}SAMPLING "
                   "AT SURVEY POINTS...\n\n")
         # get the site-indices associated with the input survey sites
         site_inds = self._get_site_indices(survey_sites)
@@ -984,10 +1156,11 @@ class Sim:
         site_surv_df = self._prep_output_data(surveys=obs,
                                               survey_pts=survey_sites,
                                               bio_data_type=bio_data_type,
+                                              absen=absen,
                                               save_site_surveys=save,
-                                              site_survey_filename=site_survey_filepath,
+                                              site_survey_filepath=site_survey_filepath,
                                               save_env_rast=save_env,
-                                              env_rast_filename=env_raster_filepath,
+                                              env_rast_filepath=env_raster_filepath,
                                              )
         return site_surv_df
 
@@ -1007,66 +1180,105 @@ class Sim:
         '''
         # get total number of individuals in the whole community
         N = np.sum([*comm.values()])
-        # copy the comm, for use as a counter object
-        counter = deepcopy(comm)
-        # create output object
-        sample = {}
-        # get vector of probs that a single sighting happens to be of each species
-        # (starts as all ones, then gets multiplied by needed values)
-        sp_probs = np.ones(len(comm))
-        # multiply by abundances (normalized to probs),
-        # if relative abundance needs to factor into sampling probs
-        if by_rel_abund:
-            sp_probs *= (np.array([*comm.values()])/(np.sum([*comm.values()])))
-        # mutliply by species' intrinsic detection probabilities, if needed
-        if by_detect_prob:
-            sp_probs *= np.array([self.spp[sp].prob_detect for sp in comm.keys()])
-        # now renormalize to probabilities that sum to 1
-        sp_probs = sp_probs/np.sum(sp_probs)
-        assert np.allclose(np.sum(sp_probs), 1)
-        # use effort and rarefaction to determine size of sample...
-        if effort is not None:
-            # NOTE: FOR NOW, ASSUMES SIMPLE LINEAR SCALING OF SAMPLE SIZE WITH EFFORT
-            n = int(np.round(N*effort, 0))
-        # ... or set it to 1, if effort is not provided and this is thus an
-        # 'opportunistic' sample
+        # just return empty sample, if community is empty
+        if N == 0:
+            return {}
         else:
-            n = 1
-        # loop over sample size, draw samp, and pop it from counter into sample
-        while np.sum([*sample.values()]) < n:
-            sp = np.random.choice([*comm.keys()], p=sp_probs)
-            if sp in counter:
-                counter[sp] -= 1
-                if counter[sp] == 0:
-                    del counter[sp]
-                if sp in sample:
-                    sample[sp] += 1
-                else:
-                    sample[sp] = 1
+            # copy the comm, for use as a counter object
+            counter = deepcopy(comm)
+            # create output object
+            sample = {}
+            # get vector of probs that a single sighting happens to be of each species
+            # (starts as all ones, then gets multiplied by needed values)
+            sp_probs = np.ones(len(comm))
+            # multiply by abundances (normalized to probs),
+            # if relative abundance needs to factor into sampling probs
+            if by_rel_abund:
+                sp_probs *= (np.array([*comm.values()])/(np.sum([*comm.values()])))
+            # mutliply by species' intrinsic detection probabilities, if needed
+            if by_detect_prob:
+                sp_probs *= np.array([self.spp[sp].prob_detect for sp in comm.keys()])
+            # now renormalize to probabilities that sum to 1
+            sp_probs = sp_probs/np.sum(sp_probs)
+            assert np.allclose(np.sum(sp_probs), 1)
+            # use effort and rarefaction to determine size of sample...
+            if effort is not None:
+                # NOTE: FOR NOW, ASSUMES SIMPLE LINEAR SCALING OF SAMPLE SIZE WITH EFFORT
+                n = int(np.round(N*effort, 0))
+            # ... or set it to 1, if effort is not provided and this is thus an
+            # 'opportunistic' sample
             else:
-                pass
-        # check all counts are <= full count in comm
-        for sp in sample:
-            assert sample[sp] <= comm[sp]
-        # check total sample size is correct
-        assert np.sum([*sample.values()]) == n
-        if effort is None:
-            assert np.sum([*sample.values()]) == 1
-        return sample
+                n = 1
+            # loop over sample size, draw samp, and pop it from counter into sample
+            while np.sum([*sample.values()]) < n:
+                sp = np.random.choice([*comm.keys()], p=sp_probs)
+                if sp in counter:
+                    counter[sp] -= 1
+                    if counter[sp] == 0:
+                        del counter[sp]
+                    if sp in sample:
+                        sample[sp] += 1
+                    else:
+                        sample[sp] = 1
+                else:
+                    pass
+            # check all counts are <= full count in comm
+            for sp in sample:
+                assert sample[sp] <= comm[sp]
+            # check total sample size is correct
+            assert np.sum([*sample.values()]) == n
+            if effort is None:
+                assert np.sum([*sample.values()]) == 1
+            return sample
+
+
+    def _convert_wide_to_long_survey_df(self,
+                                        df,
+                                        drop_absen=True,
+                                        drop_abund=True,
+                                       ):
+        '''
+        Convert a site-by-species pd.DataFrame to one that just has a single
+        row per species observation.
+        '''
+        # pivot
+        df_melt = df.melt(id_vars=['site',
+                                   'x',
+                                   'y'],
+                          value_vars=[c for c in df.columns if c.startswith('spp')],
+                          var_name='spp',
+                          value_name='abund',
+                         )
+        # recast species as integers
+        df_melt['spp'] = [int(v.lstrip('spp')) for v in df_melt['spp'].values]
+        # resort
+        df_melt = df_melt.sort_values(['site', 'spp'])
+        # drop zeros, for abundance-only or presence-only data
+        if drop_absen:
+            df_melt = df_melt[df_melt['abund']>0]
+        # drop the abund column, if presence-only
+        if drop_abund:
+            df_melt = df_melt.drop(labels=['abund'], axis=1)
+        return df_melt
 
 
     def _prep_output_data(self,
                           surveys: List[Dict[int, int]],
-                          survey_pts: List[Tuple(float, float)] = None,
+                          survey_pts: List[Tuple[float]] = None,
                           bio_data_type: str = 'abun',
+                          absen: bool = True,
                           save_site_surveys: bool = False,
-                          site_survey_filename: str = 'sobig_site_survey.csv',
+                          site_survey_filepath: str = 'sobig_site_survey.csv',
                           save_env_rast: bool = False,
-                          env_rast_filename: str = 'sobig_env_rast.tif',
+                          env_rast_filepath: str = 'sobig_env_rast.tif',
                          ) -> None:
         '''
-        prep a set of files for ouput (formatted to match inputs
-        for the basic R script for running GDM)
+        Prep a set of files for ouput.
+
+        Abundance-absence and presence-absence data are formatted to match inputs
+        for the basic R script for running GDM (a site-by-species table).
+        Abundance-only and presence-only data just have a row per species
+        observation.
         '''
         # create and save 'site-survey' table
         # (sites in rows, species in columns)
@@ -1089,14 +1301,22 @@ class Sim:
             site_surv_mat[i, 2] = pt[0]
             for j, abund in survey.items():
                 site_surv_mat[i, j+add_cols] = abund
-            # convert counts to presences, if needed
-            if bio_data_type == 'pres':
-                site_surv_mat[:, 3:] = np.clip(site_surv_mat[:, 3:], a_min=None, a_max=1)
+        # convert counts to presences, if needed
+        if bio_data_type == 'pres':
+            site_surv_mat[:, 3:] = np.clip(site_surv_mat[:, 3:], a_min=None, a_max=1)
         site_surv_df = pd.DataFrame(site_surv_mat)
         site_surv_df.columns = ['site', 'x', 'y'] + [f'spp{i}' for i in range(n_spp)]
+        # reformat as a simple 'species list' table, if no absences are to be
+        # included (and drop the abund-column, if this is presence-only data
+        # ratehr than abundance-only... recognizing that the latter is a bit odd)
+        if not absen:
+            site_surv_df = self._convert_wide_to_long_survey_df(site_surv_df,
+                                                                drop_absen=True,
+                                                                drop_abund=bio_data_type=='pres',
+                                                               )
         if save_site_surveys:
-            site_surv_df.to_csv(site_survey_filename, index=False)
-        print("\nSITE-DATA TABLE SAVED TO DISK.\n")
+            site_surv_df.to_csv(site_survey_filepath, index=False)
+        print("\n\tSITE-DATA TABLE SAVED TO DISK.\n")
         # create and save environmental raster
         if save_env_rast:
             ydim, xdim = self.env.shape[1], self.env.shape[2]
@@ -1104,7 +1324,7 @@ class Sim:
             dtype = self.env.dtype
             crs = 'EPSG:3857' # just a stand-in projected EPSG, to avoid CRS issues
             transform = rio.transform.from_origin(0, ydim, 1, 1) # top-left corner
-            with rio.open(env_rast_filename,
+            with rio.open(env_rast_filepath,
                           'w',
                           driver='GTiff',
                           height=ydim,
@@ -1115,20 +1335,20 @@ class Sim:
                           transform=transform) as dst:
                 for n in range(n_bands):
                     dst.write(self.env[n], n + 1)
-            print("\nENV RAST SAVED TO DISK.\n")
+            print("\n\tENV RAST SAVED TO DISK.\n")
         else:
-            print("\nENV RAST NOT SAVED.\n")
+            print("\n\tENV RAST NOT SAVED.\n")
         return site_surv_df
 
 
     def run_GDM(self,
                 surveys: Optional[List[Dict[int, int]]] = None,
                 gdm_data_type: str = 'abun',
-                site_survey_filename: str = 'sobig_site_survey.csv',
-                env_rast_filename: str = 'sobig_env_rast.tif',
+                site_survey_filepath: str = 'sobig_site_survey.csv',
+                env_rast_filepath: str = 'sobig_env_rast.tif',
                 delete_intermed_files: bool = False,
-                fits_filename: str = 'sobig_GDM_fits.csv',
-                pca_rast_filename: str = 'sobig_GDM_env_rast_PCA.tif',
+                fits_filepath: str = 'sobig_GDM_fits.csv',
+                pca_rast_filepath: str = 'sobig_GDM_env_rast_PCA.tif',
                 plot_it: bool = False,
                 plot_fenv_input: bool = True,
                 plot_title: str = '',
@@ -1144,9 +1364,74 @@ class Sim:
                                             #       lacking the Cpp optimizer.
                ) -> None:
         '''
-        prep GDM data, save to disk if needed,
-        then execute either the R script to run GDM or the minimalist Python
-        port of it and return resulting ispline fits and PCA-transformed raster
+        Run Generalized Dissimilarity Modeling (GDM) on simulatedcommunity
+        data.
+
+        Prepares the site-by-species survey table and environmental
+        raster, writes them to disk, then runs GDM using either R's `gdm`
+        package (via an Rscript subprocess, if available) or
+        else a minimalist Python port of GDM (ported by Claude, as a standin).
+        Attaches the results (fitted fEnvs curves and PCA-transformed raster)
+        as attributes on the Sim.
+
+        Parameters
+        ----------
+        surveys : list of dict, or None, default None
+            The per-site community data (each site's data being a
+            {species ID: abundance} dict) to run GDM on.
+            If None, uses the Sim's full set of complete, simulated
+            communities (`Sim.comms`).
+        gdm_data_type : str, default 'abun'
+            Either ``'abun'`` (abundance data) or ``'pres'``
+            (presence/absence data).
+        site_survey_filepath : str, default 'sobig_site_survey.csv'
+            Path to write the site-by-species survey table to.
+        env_rast_filepath : str, default 'sobig_env_rast.tif'
+            Path to write the environmental raster to.
+        delete_intermed_files : bool, default False
+            If True, delete `site_survey_filepath`
+            and `env_rast_filepath` after GDM has run
+            (and try to delete `fits_filepath` and
+            `pca_rast_filepath` as well).
+        fits_filepath : str, default 'sobig_GDM_fits.csv'
+            Path the fitted I-spline curves are written to
+            (for R implementation only).
+        pca_rast_filepath : str, default 'sobig_GDM_env_rast_PCA.tif'
+            Path the GDM-transformed PCA raster is written to
+            (for R implementation only).
+        plot_it : bool, default False
+            If True, call `self.plot` after GDM has run.
+        plot_fenv_input : bool, default True
+            Passed through to `self.plot` if `plot_it` is True.
+        plot_title : str, default ''
+            Passed through to `self.plot` if `plot_it` is True.
+        verbose : bool, default False
+            If True, print progress information (including the exact
+            Rscript command run, if applicable).
+        implementation : str, default 'r'
+            Either ``'r'`` (run GDM via R's `gdm` package, invoked as a
+            subprocess) or ``'py'`` (use the Python port of GDM). Falls
+            back automatically from ``'r'`` to ``'py'`` (with a warning)
+            if `Rscript` or the R `gdm` package aren't available, or if the
+            R run fails. Note that the Python implementation was simply ported
+            from R's `gdm` package by Claude, and it runs considerably
+            slower it lacks the support of the R package's compiled (C++) optimizer.
+
+        Returns
+        -------
+        gdm_fits : pandas.DataFrame
+            Fitted I-spline curves, one x/y column pair per environmental
+            raster band.
+        pca_rast_rescaled : xarray.DataArray
+            A raster of the top three PCs from the GDM transform, min-max
+            rescaled by band, and padded with all-zero bands if
+            fewer than 3 environmental layers were used.
+
+        Notes
+        -----
+        As a side effect, this also sets `self.gdm_fits`,
+        `self.gdm_pca_rast`, and, for each `fEnv` in `self.fenvs`, its
+        `x_gdm_fit` / `y_gdm_fit` attributes.
         '''
         assert isinstance(gdm_data_type, str)
         assert gdm_data_type in ['abun', 'pres']
@@ -1159,10 +1444,11 @@ class Sim:
         site_surv_df = self._prep_output_data(surveys=surveys,
                                               survey_pts=None,
                                               bio_data_type=gdm_data_type,
+                                              absen=True,
                                               save_site_surveys=True,
-                                              site_survey_filename=site_survey_filename,
+                                              site_survey_filepath=site_survey_filepath,
                                               save_env_rast=True,
-                                              env_rast_filename=env_rast_filename,
+                                              env_rast_filepath=env_rast_filepath,
                                              )
         if implementation == 'r':
             if shutil.which("Rscript") is None:
@@ -1185,11 +1471,11 @@ class Sim:
                 R_cmd = ["Rscript",
                          "--vanilla",
                          r_script,
-                         site_survey_filename,
-                         env_rast_filename,
+                         site_survey_filepath,
+                         env_rast_filepath,
                          abund,
-                         fits_filename,
-                         pca_rast_filename,
+                         fits_filepath,
+                         pca_rast_filepath,
                         ]
                 if verbose:
                     print(f"\tNOW RUNNING: > {R_cmd}\n")
@@ -1208,11 +1494,11 @@ class Sim:
                 implementation = 'py'
             else:
                 # read and return results
-                gdm_fits = pd.read_csv(fits_filename)
-                pca_rast = rxr.open_rasterio(pca_rast_filename)
+                gdm_fits = pd.read_csv(fits_filepath)
+                pca_rast = rxr.open_rasterio(pca_rast_filepath)
         if implementation == 'py':
-            site_survey_df = pd.read_csv(site_survey_filename)
-            env_rast = rxr.open_rasterio(env_rast_filename)
+            site_survey_df = pd.read_csv(site_survey_filepath)
+            env_rast = rxr.open_rasterio(env_rast_filepath)
             gdm_fits, pca_rast = pygdm.run_GDM(site_table=site_survey_df,
                                                env_raster=env_rast,
                                                abund=gdm_data_type=='abun',
@@ -1241,26 +1527,65 @@ class Sim:
                                                         ['PC1', 'PC2', 'PC3']})
         self.gdm_pca_rast = pca_rast_rescaled
         if plot_it:
-            sim.plot(scatter_sites=False,
-                     plot_fenv_input=plot_fenv_input,
-                     title=plot_title,
-                     save=False,
-                    )
+            self.plot(scatter_points=False,
+                      plot_fenv_input=plot_fenv_input,
+                      title=plot_title,
+                      save=False,
+                     )
         # delete intermediate files, if indicated
         if delete_intermed_files:
-            os.remove(site_survey_filename)
-            os.remove(env_rast_filename)
+            os.remove(site_survey_filepath)
+            os.remove(env_rast_filepath)
+            # try to delete fitted fEnv and PCA raster files too, but if the R
+            # run failed they may not have been successfully created, so in
+            # that case just skip on by
+            try:
+                os.remove(fits_filepath)
+                os.remove(pca_rast_filepath)
+            except Exception:
+                pass
         return gdm_fits, pca_rast_rescaled
 
 
     def plot(self,
-             scatter_sites: bool = True,
+             scatter_points: bool = True,
              plot_fenv_input: bool = True,
              title: str = '',
              save: bool = False,
+             fig_filepath: str = None,
             ) -> None:
         '''
-        plot the results of a simulation
+        Plot a summary figure of the simulation.
+
+        Plot includes environmental layers,
+        their fitted/input f(Env) curves, observed alpha-diversity across
+        all rasters cells with communities, and an RGB raster of the top three
+        PCs from a GDM PCA transform.
+
+        Note: Requires `run_GDM` to have already been run (uses
+        `self.gdm_pca_rast`).
+
+        Parameters
+        ----------
+        scatter_points : bool, default True
+            If True, overlay community point loations on the environmental
+            raster and the PCA raster.
+        plot_fenv_input : bool, default True
+            If True, include each layer's originally specified (input)
+            f(Env) curve alongside its GDM fit.
+        title : str, default ''
+            Overall figure title.
+        save : bool, default False
+            If True, save the figure to the filepath indicated by
+            `fig_filepath`.
+        fig_filepath : str, default None
+            Filepath to save figure to, if `save` == True.
+
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The assembled figure.
         '''
         fig = plt.figure(figsize=(16,16))
         fig.suptitle(title)
@@ -1278,7 +1603,7 @@ class Sim:
                            )
             plt.colorbar(img)
             # add survey sites
-            if scatter_sites:
+            if scatter_points:
                 for point in self.sites:
                     ax.scatter(point[0],
                                point[1],
@@ -1320,7 +1645,7 @@ class Sim:
         ax = fig.add_subplot(gs[50:, 35:65])
         self.gdm_pca_rast.plot.imshow(ax=ax)
         # add survey sites
-        if scatter_sites:
+        if scatter_points:
             for point in self.sites:
                 ax.scatter(point[0],
                            point[1],
@@ -1340,22 +1665,54 @@ class Sim:
                            )
         fig.show()
         if save:
-           fig.savefig('comm_sim_res.png',
-                        dpi=500,
-                       )
+            assert fig_filepath is not None
+            fig.savefig(fig_filepath, dpi=500)
         return fig
 
 
-    def plot_expec_vs_obser_distr(self,
-                                  sp: int,
-                                  title: Optional[str] = None,
-                                  cmap: str = 'viridis',
-                                  save: bool = False,
-                                  expec_ax: Axes = None,
-                                  obser_ax: Axes = None,
-                                 ) -> None:
+    def plot_expec_vs_obser_sp_distr(self,
+                                     sp: int,
+                                     title: Optional[str] = None,
+                                     cmap: str = 'viridis',
+                                     save: bool = False,
+                                     fig_filepath: str = None,
+                                     expec_ax: Axes = None,
+                                     obser_ax: Axes = None,
+                                    ) -> None:
         '''
-        plot both the expected and observed distribution of the given species
+        Plot a given species' presence-probability raster (i.e., expected
+        presence) and its observed presence/absence across surveyed sites.
+
+        Parameters
+        ----------
+        sp : int
+            Species ID (i.e., the species' key within `Sim.spp`).
+        title : str or None, default None
+            Overall figure title (only used if a new figure is created,
+            i.e. when `expec_ax`/`obser_ax` are not provided). If None,
+            defaults to "sp. {sp}", including the species' detection
+            probability if set.
+        cmap : str, default 'viridis'
+            Colormap used for both panels.
+        save : bool, default False
+            If True (and a new figure was created), save the figure to
+            `fig_filepath`.
+        fig_filepath : str, default None
+            Filepath to save figure to, if `save` == True.
+        expec_ax : matplotlib.axes.Axes or None, default None
+            Axes to plot the expected-distribution panel on. If either
+            this or `obser_ax` is None, a new figure (with its own
+            environmental-layer panels) is created instead.
+        obser_ax : matplotlib.axes.Axes or None, default None
+            Axes to plot the observed-distribution panel on. See
+            `expec_ax`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure or None
+            The created figure, if `expec_ax`/`obser_ax` were not
+            provided; otherwise None (the panels are drawn directly onto
+            the provided axes).
         '''
         # get species' niche
         niche = self.spp[sp].niche
@@ -1429,22 +1786,51 @@ class Sim:
                                )
             fig.show()
             if save:
-                fig.savefig(f'comm_sim_sp{sp}_expec_vs_obser_distr.png',
-                            dpi=500,
-                           )
+                assert fig_filepath is not None
+                fig.savefig(fig_filepath, dpi=500)
             return fig
 
 
-def run_demo(seed=1,
+def run_demo(dims=(10,10),
+             gamma=20,
+             seed=1,
              use_env_change=False,
              gdm_implementation='r',
             ):
     """
-    run a simple demo of sobig's functionality,
-    using the give seed number for random number generation,
-    the indicated GDM implementation,
-    and optionally producing a second plot to indicate the effect
-    of an environmental change event
+    Run a simple, self-contained demo of sobig's end-to-end functionality.
+
+    Builds a small simulated landscape, a matching set of `fEnv` functions,
+    and a species pool of total richness equal to `gamma`, then simulates
+    community composition across the landscape. Runs GDM on
+    the resulting data and plots the results.
+    Optionally repeats the whole  process again after simulating
+    an environmental change event.
+
+    Parameters
+    ----------
+    dims : tuple of int, default (10, 10)
+        (nrow, ncol) dimensions of the simulated landscape.
+    gamma : int, default 20
+        Gamma diversity (i.e., number of species in the landscape-wide species pool).
+    seed : int or None, default 1
+        Seed for NumPy's random number generator, for reproducibility. If
+        None, no seed is set.
+    use_env_change : bool, default False
+        If True, after the initial GDM run and plot, perturb one
+        environmental layer by adding spatially autocorrelated noise, then
+        re-run GDM and plotting on the changed landscape.
+    gdm_implementation : str, default 'r'
+        Passed through to `Sim.run_GDM`'s `implementation` argument:
+        either ``'r'`` or ``'py'``.
+
+    Returns
+    -------
+    Sim
+        The `Sim` object created and used for the demo (reflecting its
+        state after the environmental-change step, if `use_env_change`
+        was True).
+
     """
     # behavioral params
     VERBOSE = True
@@ -1462,7 +1848,7 @@ def run_demo(seed=1,
         np.random.seed(seed)
     # param to determine number of species on whole landscape
     # (i.e., 'inventory' diversity, a la Whittaker)
-    GAMMA = 20
+    GAMMA = gamma
     # knots and coeffs for f(Env)
     knots = ([-1.5, -1, 0, 1, 1.5],
              [-1.3, -0.2, 0.2, 1.1, 1.3],
@@ -1475,7 +1861,7 @@ def run_demo(seed=1,
     FENV = [fEnv(id=i, knots=k, coeffs=c) for i, (k, c) in enumerate(zip(knots,
                                                                          coeffs))]
     # landscape params
-    DIMS = (10, 10)
+    DIMS = dims 
     ENV_H = (0.5, 0.5, 0.5)
     ADD_NOISE = True
     dist_source = np.zeros(DIMS)
@@ -1490,7 +1876,7 @@ def run_demo(seed=1,
         ENV = [nlmpy.blendArrays([e, n]) for e, n in zip(ENV, NOISE)]
     # rescale to a normal centered on 0
     ENV = [_rescale_arr(e, new_scale=fenv._x_minmax) for fenv, e in zip(FENV, ENV)]
-    # species-species lambdas (for ~Pois distributions determining abundance)
+    # species-specific lambdas (for ~Pois distributions determining abundance)
     MAX_POISSON_LAMBDAS = None
     # detection probability vector (or None, to have randomly assigned)
     DETECT_PROBS = None
@@ -1511,13 +1897,14 @@ def run_demo(seed=1,
              )
     # run GDM on full communities
     sim.run_GDM(surveys=None,
+                gdm_data_type=GDM_DATA_TYPE,
                 implementation=gdm_implementation,
-                site_survey_filename = 'sobig_demo_site_survey.csv',
-                env_rast_filename = 'sobig_demo_env_rast.tif',
+                site_survey_filepath = 'sobig_demo_site_survey.csv',
+                env_rast_filepath = 'sobig_demo_env_rast.tif',
                 delete_intermed_files=True,
                )
     # plot and save results
-    fig = sim.plot(scatter_sites=False,
+    fig = sim.plot(scatter_points=False,
                    plot_fenv_input=True,
                    title='before change'*use_env_change,
                    save=False,
@@ -1528,29 +1915,30 @@ def run_demo(seed=1,
     # plot expected vs. observed distribution for random species
     sp = [0]
     for s in sp:
-        sim.plot_expec_vs_obser_distr(sp=s,
-                                      title=f"before change: sp {s}",
-                                      cmap='viridis',
-                                      save=False,
-                                      expec_ax=expec_ax,
-                                      obser_ax=obser_ax,
-                                     )
+        sim.plot_expec_vs_obser_sp_distr(sp=s,
+                                         title=f"before change: sp {s}",
+                                         cmap='viridis',
+                                         save=False,
+                                         expec_ax=expec_ax,
+                                         obser_ax=obser_ax,
+                                        )
     # deepcopy sim (just in case)
     sim_b4 = deepcopy(sim)
     if use_env_change:
         # update the environment to simulate environmental change, then rerun the
         # same set of GDM results
-        increase = nlmpy.mpd(50, 50, 1)*0.8
+        increase = nlmpy.mpd(nRow=DIMS[0], nCol=DIMS[1], h=1)*0.8
         ENV[1] = ENV[1] + increase
         sim.update_env(ENV)
         sim.run_GDM(surveys=None,
+                    gdm_data_type=GDM_DATA_TYPE,
                     implementation=gdm_implementation,
-                    site_survey_filename = 'sobig_demo_site_survey.csv',
-                    env_rast_filename = 'sobig_demo_env_rast.tif',
+                    site_survey_filepath = 'sobig_demo_site_survey.csv',
+                    env_rast_filepath = 'sobig_demo_env_rast.tif',
                    delete_intermed_files=True,
                    )
         # plot again
-        fig = sim.plot(scatter_sites=False,
+        fig = sim.plot(scatter_points=False,
                        plot_fenv_input=True,
                        title='after change',
                        save=False,
@@ -1561,12 +1949,12 @@ def run_demo(seed=1,
         # plot expected vs. observed distribution for random species
         sp = [0]
         for s in sp:
-            sim.plot_expec_vs_obser_distr(sp=s,
-                                          title=f"before change: sp {s}",
-                                          cmap='viridis',
-                                          save=False,
-                                          expec_ax=expec_ax,
-                                          obser_ax=obser_ax,
-                                         )
+            sim.plot_expec_vs_obser_sp_distr(sp=s,
+                                             title=f"before change: sp {s}",
+                                             cmap='viridis',
+                                             save=False,
+                                             expec_ax=expec_ax,
+                                             obser_ax=obser_ax,
+                                            )
     return sim
 

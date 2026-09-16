@@ -1,6 +1,7 @@
 """Simulation of observations of biodiversity across gradients."""
+from importlib.metadata import version, PackageNotFoundError
 
-#__version__ = "0.1.0"
+__version__ = version('sobig')
 
 from .main import fEnv, Species, Sim, run_demo
 
