@@ -7,31 +7,41 @@
         font-family="Arial, sans-serif"
         font-size="28"
         fill="#000000">
+
     <tspan fill="#f4b532">L</tspan>andscape-scale
+
     <tspan x="10" dy="37">
       <tspan fill="#349747">O</tspan>bservations by
     </tspan>
+
     <tspan x="10" dy="37">
       <tspan fill="#ea4d25">V</tspan>irtual
     </tspan>
+
     <tspan x="10" dy="37">
       <tspan fill="#68333f">E</tspan>cologist for
     </tspan>
+
     <tspan x="10" dy="37">
       <tspan fill="#a95b07">B</tspan>iodiversity
     </tspan>
+
     <tspan x="10" dy="37">
       <tspan fill="#70e942">I</tspan>nventory
     </tspan>
+
     <tspan x="10" dy="37">
       <tspan fill="#eac033">R</tspan>esearch
     </tspan>
+
     <tspan x="10" dy="37">
       <tspan fill="#fb6523">D</tspan>esign by
     </tspan>
+
     <tspan x="10" dy="37">
       <tspan fill="#368232">S</tspan>imulation
     </tspan>
+
   </text>
 
 </svg>
