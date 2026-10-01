@@ -2,6 +2,8 @@
 
 ### <span style="color:f4b532">L</span>andscape-scale <span style="color:349747">O</span>bservations by <span style="color:ea4d25">V</span>irtual <span style="color:68333f">E</span>cologist for <span style="color:a95b07">B</span>iodiversity <span style="color:70e942">I</span>nventory <span style="color:eac033">R</span>esearch <span style="color:fb6523">D</span>esign by <span style="color:368232">S</span>imulation
 
+## ![LOVEBIRDS Title](./lovebirds-title.svg)
+
 A Python package for simulating ecological communities and their biased or unbiased observations, across space and time
 
 _lovebirds_ 'reverse-engineers' generalised dissimilarity modelling (GDM)
