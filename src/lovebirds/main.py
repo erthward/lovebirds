@@ -1268,9 +1268,9 @@ class Sim:
                           bio_data_type: str = 'abun',
                           absen: bool = True,
                           save_site_surveys: bool = False,
-                          site_survey_filepath: str = 'sobig_site_survey.csv',
+                          site_survey_filepath: str = 'lovebirds_site_survey.csv',
                           save_env_rast: bool = False,
-                          env_rast_filepath: str = 'sobig_env_rast.tif',
+                          env_rast_filepath: str = 'lovebirds_env_rast.tif',
                          ) -> None:
         '''
         Prep a set of files for ouput.
@@ -1344,11 +1344,11 @@ class Sim:
     def run_GDM(self,
                 surveys: Optional[List[Dict[int, int]]] = None,
                 gdm_data_type: str = 'abun',
-                site_survey_filepath: str = 'sobig_site_survey.csv',
-                env_rast_filepath: str = 'sobig_env_rast.tif',
+                site_survey_filepath: str = 'lovebirds_site_survey.csv',
+                env_rast_filepath: str = 'lovebirds_env_rast.tif',
                 delete_intermed_files: bool = False,
-                fits_filepath: str = 'sobig_GDM_fits.csv',
-                pca_rast_filepath: str = 'sobig_GDM_env_rast_PCA.tif',
+                fits_filepath: str = 'lovebirds_GDM_fits.csv',
+                pca_rast_filepath: str = 'lovebirds_GDM_env_rast_PCA.tif',
                 plot_it: bool = False,
                 plot_fenv_input: bool = True,
                 plot_title: str = '',
@@ -1384,19 +1384,19 @@ class Sim:
         gdm_data_type : str, default 'abun'
             Either ``'abun'`` (abundance data) or ``'pres'``
             (presence/absence data).
-        site_survey_filepath : str, default 'sobig_site_survey.csv'
+        site_survey_filepath : str, default 'lovebirds_site_survey.csv'
             Path to write the site-by-species survey table to.
-        env_rast_filepath : str, default 'sobig_env_rast.tif'
+        env_rast_filepath : str, default 'lovebirds_env_rast.tif'
             Path to write the environmental raster to.
         delete_intermed_files : bool, default False
             If True, delete `site_survey_filepath`
             and `env_rast_filepath` after GDM has run
             (and try to delete `fits_filepath` and
             `pca_rast_filepath` as well).
-        fits_filepath : str, default 'sobig_GDM_fits.csv'
+        fits_filepath : str, default 'lovebirds_GDM_fits.csv'
             Path the fitted I-spline curves are written to
             (for R implementation only).
-        pca_rast_filepath : str, default 'sobig_GDM_env_rast_PCA.tif'
+        pca_rast_filepath : str, default 'lovebirds_GDM_env_rast_PCA.tif'
             Path the GDM-transformed PCA raster is written to
             (for R implementation only).
         plot_it : bool, default False
@@ -1466,7 +1466,7 @@ class Sim:
             else:
                 abund = 'FALSE'
 
-            r_script = files("sobig").joinpath("_r", "run_gdm.R")
+            r_script = files("lovebirds").joinpath("_r", "run_gdm.R")
             with as_file(r_script) as script_path:
                 R_cmd = ["Rscript",
                          "--vanilla",
@@ -1798,7 +1798,7 @@ def run_demo(dims=(10,10),
              gdm_implementation='r',
             ):
     """
-    Run a simple, self-contained demo of sobig's end-to-end functionality.
+    Run a simple, self-contained demo of lovebirds' end-to-end functionality.
 
     Builds a small simulated landscape, a matching set of `fEnv` functions,
     and a species pool of total richness equal to `gamma`, then simulates
@@ -1899,8 +1899,8 @@ def run_demo(dims=(10,10),
     sim.run_GDM(surveys=None,
                 gdm_data_type=GDM_DATA_TYPE,
                 implementation=gdm_implementation,
-                site_survey_filepath = 'sobig_demo_site_survey.csv',
-                env_rast_filepath = 'sobig_demo_env_rast.tif',
+                site_survey_filepath = 'lovebirds_demo_site_survey.csv',
+                env_rast_filepath = 'lovebirds_demo_env_rast.tif',
                 delete_intermed_files=True,
                )
     # plot and save results
@@ -1933,8 +1933,8 @@ def run_demo(dims=(10,10),
         sim.run_GDM(surveys=None,
                     gdm_data_type=GDM_DATA_TYPE,
                     implementation=gdm_implementation,
-                    site_survey_filepath = 'sobig_demo_site_survey.csv',
-                    env_rast_filepath = 'sobig_demo_env_rast.tif',
+                    site_survey_filepath = 'lovebirds_demo_site_survey.csv',
+                    env_rast_filepath = 'lovebirds_demo_env_rast.tif',
                    delete_intermed_files=True,
                    )
         # plot again

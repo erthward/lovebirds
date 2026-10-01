@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sobig"
+name = "lovebirds"
 version = "0.1.11"
 description = "Simulation of observations of biodiversity across gradients."
 readme = "README.md"
@@ -37,12 +37,12 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/erthward/sobig"
-Repository = "https://github.com/erthward/sobig"
-Issues = "https://github.com/erthward/sobig/issues"
+Homepage = "https://github.com/erthward/lovebirds"
+Repository = "https://github.com/erthward/lovebirds"
+Issues = "https://github.com/erthward/lovebirds/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sobig"]
+packages = ["src/lovebirds"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
