@@ -1,10 +1,12 @@
-# SOBiG!
+# lovebirds
 
-### **S**imulation of **O**bservations of **Bi**odiversity across **G**radients
+### **L**andscape-scale **O**bservations by **V**irtual **E**cologist for **B**iodiversity **I**nventory **R**esearch** **D**esign by **S**imulation
 
-A Python package for 'reverse-engineering' generalised dissimilarity modelling (GDM)
-to simulate communities distributed across variable landscapes,
-and then using a 'virtual ecologist' to simulate various observation processes on those communities.
+A Python package for simulating ecological communities and their biased or unbiased observations, across space and time
+
+_lovebirds_ 'reverse-engineers' generalised dissimilarity modelling (GDM)
+to simulate communities distributed across heterogeneous landscapes,
+then uses a 'virtual ecologist' approach to simulate various observation processes on those communities.
 
 ![overview](img/sim_comm_comp_design.png)
 
@@ -31,7 +33,7 @@ See the documentation for the full API and examples.
 ## Installation
 
 ```bash
-pip install sobig
+pip install lovebirds
 ```
 
 ## License
