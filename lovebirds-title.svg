@@ -8,38 +8,38 @@
         font-size="28"
         fill="#000000">
 
-    <tspan fill="#f4b532">L</tspan>andscape-scale
+    <tspan fill="#f4b532" font-weight="bold">L</tspan>andscape-scale
 
     <tspan x="10" dy="37">
-      <tspan fill="#349747">O</tspan>bservations by
+      <tspan fill="#349747" font-weight="bold">O</tspan>bservations by
     </tspan>
 
     <tspan x="10" dy="37">
-      <tspan fill="#ea4d25">V</tspan>irtual
+      <tspan fill="#ea4d25" font-weight="bold">V</tspan>irtual
     </tspan>
 
     <tspan x="10" dy="37">
-      <tspan fill="#68333f">E</tspan>cologist for
+      <tspan fill="#68333f" font-weight="bold">E</tspan>cologist for
     </tspan>
 
     <tspan x="10" dy="37">
-      <tspan fill="#a95b07">B</tspan>iodiversity
+      <tspan fill="#a95b07" font-weight="bold">B</tspan>iodiversity
     </tspan>
 
     <tspan x="10" dy="37">
-      <tspan fill="#70e942">I</tspan>nventory
+      <tspan fill="#70e942" font-weight="bold">I</tspan>nventory
     </tspan>
 
     <tspan x="10" dy="37">
-      <tspan fill="#eac033">R</tspan>esearch
+      <tspan fill="#eac033" font-weight="bold">R</tspan>esearch
     </tspan>
 
     <tspan x="10" dy="37">
-      <tspan fill="#fb6523">D</tspan>esign by
+      <tspan fill="#fb6523" font-weight="bold">D</tspan>esign by
     </tspan>
 
     <tspan x="10" dy="37">
-      <tspan fill="#368232">S</tspan>imulation
+      <tspan fill="#368232" font-weight="bold">S</tspan>imulation
     </tspan>
 
   </text>
