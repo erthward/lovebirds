@@ -1,13 +1,45 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="60" viewBox="0 0 900 60">
-  <text x="0" y="40" font-family="Arial, sans-serif" font-size="28" fill="#000000">
-    <tspan fill="#f4b532">L</tspan>andscape-scale
-    <tspan fill="#349747">O</tspan>bservations by
-    <tspan fill="#ea4d25">V</tspan>irtual
-    <tspan fill="#68333f">E</tspan>cologist for
-    <tspan fill="#a95b07">B</tspan>iodiversity
-    <tspan fill="#70e942">I</tspan>nventory
-    <tspan fill="#eac033">R</tspan>esearch
-    <tspan fill="#fb6523">D</tspan>esign by
-    <tspan fill="#368232">S</tspan>imulation
-  </text>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="700"
+     height="340"
+     viewBox="0 0 700 340">
+
+  <g font-family="Arial, sans-serif" font-size="28" fill="#000000">
+
+    <text x="10" y="35">
+      <tspan fill="#f4b532">L</tspan>andscape-scale
+    </text>
+
+    <text x="10" y="72">
+      <tspan fill="#349747">O</tspan>bservations by
+    </text>
+
+    <text x="10" y="109">
+      <tspan fill="#ea4d25">V</tspan>irtual
+    </text>
+
+    <text x="10" y="146">
+      <tspan fill="#68333f">E</tspan>cologist for
+    </text>
+
+    <text x="10" y="183">
+      <tspan fill="#a95b07">B</tspan>iodiversity
+    </text>
+
+    <text x="10" y="220">
+      <tspan fill="#70e942">I</tspan>nventory
+    </text>
+
+    <text x="10" y="257">
+      <tspan fill="#eac033">R</tspan>esearch
+    </text>
+
+    <text x="10" y="294">
+      <tspan fill="#fb6523">D</tspan>esign by
+    </text>
+
+    <text x="10" y="331">
+      <tspan fill="#368232">S</tspan>imulation
+    </text>
+
+  </g>
 </svg>
