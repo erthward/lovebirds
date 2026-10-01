@@ -1,6 +1,7 @@
 # lovebirds
 
-## ![lovebirds-title](lovebirds-title.svg)
+# ![lovebirds-title-line1](lovebirds-title1.svg)
+# ![lovebirds-title-line2](lovebirds-title2.svg)
 
 A Python package for simulating ecological communities and their biased or unbiased observations, across space and time
 
