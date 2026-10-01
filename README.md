@@ -2,7 +2,7 @@
 
 # lovebirds
 
-A Python package for simulating and sampling ecological communities, across space and time
+A Python package for simulating and sampling ecological communities across space and time
 
 -------------------------
 
