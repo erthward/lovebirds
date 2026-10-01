@@ -1,8 +1,10 @@
+![lovebirds-title](lovebirds-title.svg)
+
 # lovebirds
 
-# ![lovebirds-title](lovebirds-title.svg)
-
 A Python package for simulating ecological communities and their biased or unbiased observations, across space and time
+
+-------------------------
 
 _lovebirds_ 'reverse-engineers' generalised dissimilarity modelling (GDM)
 to simulate communities distributed across heterogeneous landscapes,
