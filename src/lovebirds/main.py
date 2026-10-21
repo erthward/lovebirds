@@ -674,10 +674,13 @@ class Sim:
         # this is the maximum value that a Poisson draw will take in a location
         # where probability of presence goes to 1.0)
         if max_poisson_lambdas is None:
-            max_poisson_lambdas = np.random.uniform(1,
-                                                    self.max_poisson_lambda_across_spp,
-                                                    self.gamma,
-                                                   )
+            max_poisson_lambdas = np.random.lognormal(0,
+                                                      2,
+                                                      self.gamma,
+                                                     )
+            max_poisson_lambdas = (max_poisson_lambdas /
+                                   max(max_poisson_lambdas) *
+                                   self.max_poisson_lambda_across_spp)
         else:
             assert np.all(max_poisson_lambdas > 0)
         # draw detection probabilities randomly, if not provided
